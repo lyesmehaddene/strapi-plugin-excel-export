@@ -65,72 +65,46 @@ module.exports = ({ strapi }) => ({
       columns: header,
     };
   },
+
   async downloadExcel(ctx) {
     try {
       let excel = strapi.config.get("excel");
-
       let uid = ctx?.query?.uid;
-
       let query = await this.restructureObject(excel?.config[uid], uid);
-
       let response = await strapi.db.query(uid).findMany(query);
-
       let excelData = await this.restructureData(response, excel?.config[uid]);
 
-      // Create a new workbook and add a worksheet
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Sheet 1");
 
-      // Extract column headers dynamically from the data
-      let headers = [
-        ...excel?.config[uid]?.columns,
-        ...Object.keys(excel?.config[uid]?.relation),
-      ];
+      // Format headers
 
-      // // Transform the original headers to the desired format
-      let headerRestructure = [];
-      headers?.forEach((element) => {
-        const formattedHeader = element
-          .split("_")
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(" ");
-
-        headerRestructure.push(formattedHeader);
-      });
-
-      // Define dynamic column headers
-      worksheet.columns = headers.map((header, index) => ({
-        header: headerRestructure[index], // Use the formatted header
+      let headers = [...excel?.config[uid]?.columns, ...Object.keys(excel?.config[uid]?.relation)];
+      worksheet.columns = headers.map(header => ({
+        header: header.replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase()),
         key: header,
-        width: 20,
+        width: 20
       }));
 
-      // Define the dropdown list options for the Gender column
-
       // Add data to the worksheet
-      excelData?.forEach((row) => {
-        // Excel will provide a dropdown with these values.
+
+      excelData.forEach(row => {
         worksheet.addRow(row);
       });
 
-      // Enable text wrapping for all columns
-      worksheet.columns.forEach((column) => {
+      worksheet.columns.forEach(column => {
         column.alignment = { wrapText: true };
       });
 
-      // Freeze the first row
-      worksheet.views = [
-        { state: "frozen", xSplit: 0, ySplit: 1, topLeftCell: "A" },
-      ];
+      worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 1, topLeftCell: "A2" }];
 
-      // Write the workbook to a file
-      const buffer = await workbook.xlsx.writeBuffer();
+      return await workbook.xlsx.writeBuffer();
 
-      return buffer;
     } catch (error) {
       console.error("Error writing buffer:", error);
     }
   },
+
   async restructureObject(inputObject, uid, limit, offset) {
     let excel = strapi.config.get("excel");
 
